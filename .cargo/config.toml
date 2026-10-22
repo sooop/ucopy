@@ -1,0 +1,7 @@
+[build]
+target = "x86_64-pc-windows-gnu"
+
+[target.x86_64-pc-windows-gnu]
+# MSYS2 mingw64 이 PATH 에 없으므로 절대 경로로 지정한다
+linker = "C:/msys64/mingw64/bin/gcc.exe"
+rustflags = ["-C", "target-feature=+crt-static"]
