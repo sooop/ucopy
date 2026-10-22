@@ -15,8 +15,9 @@ ucopy - UTF-8 클립보드 도구
 
 사용법:
   <명령> | ucopy        stdin(UTF-8)을 클립보드에 복사
-  ucopy --paste         클립보드 내용을 UTF-8 로 stdout 에 출력
-  ucopy --help          도움말
+  ucopy -p, --paste     클립보드 내용을 UTF-8 로 stdout 에 출력
+  -n                    복사/붙여넣기 시 앞뒤 개행 제거 (예: ucopy -n, ucopy -p -n)
+  ucopy -h, --help      도움말
 ";
 
 /// 클립보드를 열고 스코프가 끝나면 닫는다. 다른 프로세스가 점유 중일 수 있어 재시도한다.
@@ -69,7 +70,17 @@ fn ansi_to_utf16(bytes: &[u8]) -> Vec<u16> {
     }
 }
 
-fn copy() -> Result<(), String> {
+/// 앞뒤의 개행(CR/LF)을 제거한다.
+fn trim_newlines(wide: &mut Vec<u16>) {
+    let is_nl = |c: &u16| *c == 0x0A || *c == 0x0D;
+    while wide.last().is_some_and(is_nl) {
+        wide.pop();
+    }
+    let start = wide.iter().take_while(|c| is_nl(c)).count();
+    wide.drain(..start);
+}
+
+fn copy(trim: bool) -> Result<(), String> {
     let mut input = Vec::new();
     io::stdin()
         .lock()
@@ -77,6 +88,9 @@ fn copy() -> Result<(), String> {
         .map_err(|e| format!("stdin 읽기 실패: {e}"))?;
 
     let mut wide = decode(&input);
+    if trim {
+        trim_newlines(&mut wide);
+    }
     wide.push(0);
     let size = wide.len() * 2;
 
@@ -104,7 +118,7 @@ fn copy() -> Result<(), String> {
     Ok(())
 }
 
-fn paste() -> Result<(), String> {
+fn paste(trim: bool) -> Result<(), String> {
     let text = {
         let _cb = Clipboard::open()?;
         unsafe {
@@ -125,6 +139,11 @@ fn paste() -> Result<(), String> {
             s
         }
     };
+    let text = if trim {
+        text.trim_matches(|c| c == '\n' || c == '\r')
+    } else {
+        &text
+    };
     let mut out = io::stdout().lock();
     out.write_all(text.as_bytes())
         .and_then(|_| out.flush())
@@ -133,9 +152,11 @@ fn paste() -> Result<(), String> {
 
 fn main() -> ExitCode {
     let mut paste_mode = false;
+    let mut trim = false;
     for arg in std::env::args().skip(1) {
         match arg.as_str() {
             "-p" | "--paste" => paste_mode = true,
+            "-n" => trim = true,
             "-h" | "--help" => {
                 print!("{USAGE}");
                 return ExitCode::SUCCESS;
@@ -146,7 +167,7 @@ fn main() -> ExitCode {
             }
         }
     }
-    let result = if paste_mode { paste() } else { copy() };
+    let result = if paste_mode { paste(trim) } else { copy(trim) };
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
