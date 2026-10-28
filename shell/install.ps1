@@ -4,7 +4,7 @@
 param([switch]$Uninstall)
 
 $sendTo = [Environment]::GetFolderPath('SendTo')
-$lnk = Join-Path $sendTo '내용 복사.lnk'
+$lnk = Join-Path $sendTo 'CopyContents.lnk'
 
 if ($Uninstall) {
     Remove-Item -LiteralPath $lnk -ErrorAction SilentlyContinue
